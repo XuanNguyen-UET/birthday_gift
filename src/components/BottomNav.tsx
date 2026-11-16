@@ -25,7 +25,7 @@ export function BottomNav({
       aria-label="Birthday pages navigation"
       onPointerDown={(e) => e.stopPropagation()}
       onTouchStart={(e) => e.stopPropagation()}
-      className="absolute bottom-4 left-4 right-4 z-40 flex h-[62px] items-center justify-between rounded-full bg-white/95 px-2.5 shadow-[0_10px_30px_rgba(45,25,43,0.12)] backdrop-blur-md"
+      className="absolute bottom-[max(1rem,env(safe-area-inset-bottom))] left-4 right-4 z-40 flex h-[62px] items-center justify-between rounded-full bg-white/95 px-2.5 shadow-[0_10px_30px_rgba(45,25,43,0.12)] backdrop-blur-md"
     >
       {/* Left previous button */}
       <button

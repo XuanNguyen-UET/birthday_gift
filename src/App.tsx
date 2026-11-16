@@ -37,7 +37,7 @@ export function App() {
 
   // Horizontal swipe gestures active ONLY from Page 1 onwards
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (currentPage === 0) return;
+    if (currentPage === 0 || !e.isPrimary) return;
     pointerStartRef.current = {
       x: e.clientX,
       y: e.clientY,
@@ -46,7 +46,7 @@ export function App() {
   };
 
   const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (currentPage === 0 || !pointerStartRef.current) return;
+    if (currentPage === 0 || !e.isPrimary || !pointerStartRef.current) return;
     const start = pointerStartRef.current;
     pointerStartRef.current = null;
 
@@ -67,7 +67,7 @@ export function App() {
   const activeContentPage = currentPage >= 1 ? mockData.pages[currentPage - 1] : null;
 
   return (
-    <main className="flex min-h-dvh w-full flex-col items-center justify-center bg-gradient-to-br from-[#FFF7F1] via-[#FCEEE9] to-[#FBE2DD] p-0 sm:p-4 select-none">
+    <main className="flex min-h-dvh w-full flex-col items-center justify-center overscroll-none bg-gradient-to-br from-[#FFF7F1] via-[#FCEEE9] to-[#FBE2DD] p-0 sm:p-4 select-none">
       {/* Desktop Phone Frame Wrapper */}
       <div className="relative flex items-center justify-center w-full sm:w-auto">
         {/* Decorative side hardware buttons on desktop frame */}
@@ -87,7 +87,7 @@ export function App() {
           onPointerCancel={() => {
             pointerStartRef.current = null;
           }}
-          className="relative h-dvh w-screen overflow-hidden bg-[#FDF5EE] sm:h-[852px] sm:max-h-[95dvh] sm:w-[393px] sm:max-w-[393px] sm:rounded-[46px] sm:border-[8px] sm:border-[#DBD0CB] sm:shadow-[0_24px_65px_rgba(45,25,43,0.16)]"
+          className="relative h-dvh w-screen touch-pan-y overscroll-none overflow-hidden bg-[#FDF5EE] sm:h-[852px] sm:max-h-[95dvh] sm:w-[393px] sm:max-w-[393px] sm:rounded-[46px] sm:border-[8px] sm:border-[#DBD0CB] sm:shadow-[0_24px_65px_rgba(45,25,43,0.16)]"
         >
           {/* Global Top-Right Floating Audio Toggle */}
           <AudioToggle

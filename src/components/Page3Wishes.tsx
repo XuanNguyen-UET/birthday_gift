@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { Environment, Lightformer, Sparkles } from '@react-three/drei';
@@ -62,9 +62,54 @@ const STRIP_THEMES: Record<WishItem['color'], StripTheme> = {
     starDark: '#D85B4E',
     starGlow: 'rgba(247, 142, 130, 0.6)',
   },
+  sky: {
+    bg: '#E8F4FD',
+    bgTo: '#D8ECFB',
+    border: '#B5DBF7',
+    starPrimary: '#74C7F2',
+    starLight: '#CEEEFF',
+    starDark: '#3E9CD1',
+    starGlow: 'rgba(116, 199, 242, 0.6)',
+  },
+  apricot: {
+    bg: '#FFF1E4',
+    bgTo: '#FDE3CB',
+    border: '#F7C99E',
+    starPrimary: '#FFB36B',
+    starLight: '#FFE2C4',
+    starDark: '#DC8132',
+    starGlow: 'rgba(255, 179, 107, 0.6)',
+  },
+  orchid: {
+    bg: '#F8EAFA',
+    bgTo: '#F1D8F6',
+    border: '#E4B7EE',
+    starPrimary: '#E895D8',
+    starLight: '#FFD8F8',
+    starDark: '#C25CB0',
+    starGlow: 'rgba(232, 149, 216, 0.6)',
+  },
+  lime: {
+    bg: '#EEF9E6',
+    bgTo: '#DFF3D1',
+    border: '#C0E5A8',
+    starPrimary: '#9BE07A',
+    starLight: '#DCFBC9',
+    starDark: '#63B541',
+    starGlow: 'rgba(155, 224, 122, 0.6)',
+  },
+  aqua: {
+    bg: '#E6F9FA',
+    bgTo: '#D4F2F4',
+    border: '#AAE2E7',
+    starPrimary: '#7ADCE0',
+    starLight: '#CEFBFC',
+    starDark: '#3FAEB4',
+    starGlow: 'rgba(122, 220, 224, 0.6)',
+  },
 };
 
-const TILT_ANGLES = [-1.25, 0.95, -0.75, 1.15, -0.85];
+const TILT_ANGLES = [-1.35, 1.05, -0.85, 1.2, -0.95];
 
 const JAR_STAR_COLORS = [
   '#F78EB1',
@@ -72,6 +117,12 @@ const JAR_STAR_COLORS = [
   '#76D3B3',
   '#B08CEB',
   '#F78E82',
+  '#74C7F2',
+  '#FFB36B',
+  '#E895D8',
+  '#9BE07A',
+  '#7ADCE0',
+  '#FF9EBB',
   '#FFE27A',
 ];
 
@@ -115,8 +166,8 @@ function createJarLatheGeometry(): THREE.LatheGeometry {
     new THREE.Vector2(0.47, 0.88),
     new THREE.Vector2(0.44, 0.77),
   ]);
-  const smoothPts = curve.getPoints(56);
-  return new THREE.LatheGeometry(smoothPts, 64);
+  const smoothPts = curve.getPoints(44);
+  return new THREE.LatheGeometry(smoothPts, 48);
 }
 
 function createGlassHighlightGeometry(): THREE.LatheGeometry {
@@ -132,8 +183,8 @@ function createGlassHighlightGeometry(): THREE.LatheGeometry {
 function createPuffyStarGeometry(): THREE.ExtrudeGeometry {
   const shape = new THREE.Shape();
   const points = 5;
-  const outerR = 0.115;
-  const innerR = 0.056;
+  const outerR = 0.142;
+  const innerR = 0.068;
 
   for (let i = 0; i < points * 2; i++) {
     const angle = (i * Math.PI) / points - Math.PI / 2;
@@ -146,25 +197,45 @@ function createPuffyStarGeometry(): THREE.ExtrudeGeometry {
   shape.closePath();
 
   const geom = new THREE.ExtrudeGeometry(shape, {
-    depth: 0.028,
+    depth: 0.034,
     bevelEnabled: true,
-    bevelSegments: 4,
+    bevelSegments: 2,
     steps: 1,
-    bevelSize: 0.026,
-    bevelThickness: 0.036,
+    bevelSize: 0.03,
+    bevelThickness: 0.042,
   });
   geom.center();
   return geom;
 }
 
-function GlassStreakHighlight() {
-  const streakGeo = useMemo(() => createGlassHighlightGeometry(), []);
+// Module-level singletons avoid regenerating Three.js geometries/textures on every Page 3 mount
+let sharedJarGeo: THREE.LatheGeometry | null = null;
+let sharedStreakGeo: THREE.LatheGeometry | null = null;
+let sharedStarGeo: THREE.ExtrudeGeometry | null = null;
+let sharedShadowTex: THREE.CanvasTexture | null = null;
 
-  useEffect(() => {
-    return () => {
-      streakGeo.dispose();
-    };
-  }, [streakGeo]);
+function getSharedJarGeo(): THREE.LatheGeometry {
+  if (!sharedJarGeo) sharedJarGeo = createJarLatheGeometry();
+  return sharedJarGeo;
+}
+
+function getSharedStreakGeo(): THREE.LatheGeometry {
+  if (!sharedStreakGeo) sharedStreakGeo = createGlassHighlightGeometry();
+  return sharedStreakGeo;
+}
+
+function getSharedStarGeo(): THREE.ExtrudeGeometry {
+  if (!sharedStarGeo) sharedStarGeo = createPuffyStarGeometry();
+  return sharedStarGeo;
+}
+
+function getSharedShadowTex(): THREE.CanvasTexture {
+  if (!sharedShadowTex) sharedShadowTex = createFloorShadowTexture();
+  return sharedShadowTex;
+}
+
+function GlassStreakHighlight() {
+  const streakGeo = useMemo(() => getSharedStreakGeo(), []);
 
   return (
     <mesh geometry={streakGeo} scale={1.006} rotation={[0, -0.25, 0]}>
@@ -193,18 +264,22 @@ interface WishingJarSceneProps {
   targetYawRef: React.MutableRefObject<number>;
   targetPitchRef: React.MutableRefObject<number>;
   isDraggingRef: React.MutableRefObject<boolean>;
+  isHoldingRef: React.MutableRefObject<boolean>;
   shakeImpulseRef: React.MutableRefObject<{
     velZ: number;
     velX: number;
     swirlEnergy: number;
   }>;
+  onSceneReady?: () => void;
 }
 
 function WishingJarScene({
   targetYawRef,
   targetPitchRef,
   isDraggingRef,
+  isHoldingRef,
   shakeImpulseRef,
+  onSceneReady,
 }: WishingJarSceneProps) {
   const jarGroupRef = useRef<THREE.Group>(null);
   const corkRef = useRef<THREE.Group>(null);
@@ -212,18 +287,22 @@ function WishingJarScene({
   const shakeAngleZ = useRef(0);
   const shakeAngleX = useRef(0);
   const shakeOffsetY = useRef(0);
+  const frameCountRef = useRef(0);
+  const readyFiredRef = useRef(false);
+  const onSceneReadyRef = useRef(onSceneReady);
+  onSceneReadyRef.current = onSceneReady;
 
-  const jarGeo = useMemo(() => createJarLatheGeometry(), []);
-  const starGeo = useMemo(() => createPuffyStarGeometry(), []);
-  const shadowTex = useMemo(() => createFloorShadowTexture(), []);
+  const jarGeo = useMemo(() => getSharedJarGeo(), []);
+  const starGeo = useMemo(() => getSharedStarGeo(), []);
+  const shadowTex = useMemo(() => getSharedShadowTex(), []);
 
   const starsData = useMemo<StarParticleSpec[]>(() => {
     const specs: StarParticleSpec[] = [];
-    for (let i = 0; i < 28; i++) {
-      // Cluster stars richly from jar floor up into lower-mid belly
-      const layerT = i / 27;
-      const y = -0.68 + layerT * 0.96 + (seededRandom(i * 11 + 1) - 0.5) * 0.08;
-      const maxR = y > 0.18 ? 0.5 : 0.64;
+    for (let i = 0; i < 30; i++) {
+      // Cluster larger colorful stars richly from jar floor up into lower-mid belly
+      const layerT = i / 29;
+      const y = -0.66 + layerT * 0.94 + (seededRandom(i * 11 + 1) - 0.5) * 0.08;
+      const maxR = y > 0.18 ? 0.44 : 0.56;
       const radial = Math.sqrt(seededRandom(i * 13 + 3)) * maxR;
       const angle = seededRandom(i * 17 + 5) * Math.PI * 2;
       specs.push({
@@ -234,7 +313,7 @@ function WishingJarScene({
           seededRandom(i * 23 + 9) * Math.PI,
           seededRandom(i * 29 + 11) * Math.PI,
         ],
-        scale: 0.78 + seededRandom(i * 31 + 13) * 0.36,
+        scale: 0.96 + seededRandom(i * 31 + 13) * 0.36,
         color: JAR_STAR_COLORS[i % JAR_STAR_COLORS.length],
         speed: 0.9 + seededRandom(i * 37 + 15) * 0.9,
         phase: seededRandom(i * 41 + 17) * Math.PI * 2,
@@ -257,20 +336,26 @@ function WishingJarScene({
     return pts;
   }, []);
 
-  useEffect(() => {
-    return () => {
-      jarGeo.dispose();
-      starGeo.dispose();
-      shadowTex.dispose();
-    };
-  }, [jarGeo, starGeo, shadowTex]);
-
   useFrame((state, delta) => {
+    if (!readyFiredRef.current) {
+      frameCountRef.current += 1;
+      if (frameCountRef.current >= 3) {
+        readyFiredRef.current = true;
+        onSceneReadyRef.current?.();
+      }
+    }
+
     const dt = Math.min(delta, 0.05);
     const t = state.clock.getElapsedTime();
 
-    // Spring-damped shake physics from drops or tap
+    // Spring-damped shake physics + continuous rhythmic shake while holding
     const imp = shakeImpulseRef.current;
+    if (isHoldingRef.current) {
+      imp.swirlEnergy = Math.max(imp.swirlEnergy, 1.15);
+      imp.velZ += Math.sin(t * 28) * 28 * dt;
+      imp.velX += Math.cos(t * 22) * 14 * dt;
+    }
+
     const springK = 145;
     const damping = 9.5;
 
@@ -284,11 +369,11 @@ function WishingJarScene({
 
     shakeOffsetY.current = THREE.MathUtils.lerp(
       shakeOffsetY.current,
-      Math.abs(imp.velZ) * 0.012,
+      Math.abs(imp.velZ) * 0.015 + (isHoldingRef.current ? 0.025 : 0),
       dt * 12
     );
 
-    imp.swirlEnergy = Math.max(0, imp.swirlEnergy - dt * 1.35);
+    imp.swirlEnergy = Math.max(0, imp.swirlEnergy - dt * (isHoldingRef.current ? 0.45 : 1.15));
 
     if (!isDraggingRef.current) {
       // Softly relax drag tilt back toward natural slight idle sway
@@ -313,12 +398,13 @@ function WishingJarScene({
       );
       jarGroupRef.current.rotation.z = shakeAngleZ.current;
       jarGroupRef.current.position.y =
-        -0.02 + Math.sin(t * 1.4) * 0.02 + shakeOffsetY.current;
+        -0.04 + Math.sin(t * 1.4) * 0.02 + shakeOffsetY.current;
     }
 
     if (corkRef.current) {
-      corkRef.current.position.y = Math.abs(shakeAngleZ.current) * 0.08;
-      corkRef.current.rotation.z = -0.03 + shakeAngleZ.current * 0.35;
+      corkRef.current.position.y =
+        Math.abs(shakeAngleZ.current) * 0.14 + imp.swirlEnergy * 0.045;
+      corkRef.current.rotation.z = -0.03 + shakeAngleZ.current * 0.42;
     }
 
     // Animate 28 puffy origami stars floating + swirling inside the jar
@@ -348,7 +434,7 @@ function WishingJarScene({
   return (
     <>
       {/* Offline Procedural Environment Reflections for Realistic Clear Glass */}
-      <Environment resolution={128} frames={1}>
+      <Environment resolution={64} frames={1}>
         <Lightformer
           form="rect"
           intensity={2.6}
@@ -388,23 +474,23 @@ function WishingJarScene({
       <directionalLight position={[-3.2, 1.8, 2.5]} intensity={0.65} color="#FFE7F1" />
 
       {/* Ground Contact Shadow */}
-      <mesh position={[0, -1.04, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[2.55, 2.05]} />
+      <mesh position={[0, -1.08, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[2.7, 2.15]} />
         <meshBasicMaterial map={shadowTex} transparent depthWrite={false} />
       </mesh>
 
       {/* Outer Magic Stardust Sparkles */}
       <Sparkles
-        count={28}
-        scale={[2.9, 2.35, 2.1]}
-        size={2.6}
-        speed={0.55}
+        count={32}
+        scale={[3.1, 2.5, 2.2]}
+        size={2.8}
+        speed={0.58}
         opacity={0.85}
         color="#FFD65C"
       />
 
       {/* Interactive Wishing Jar Assembly */}
-      <group ref={jarGroupRef} position={[0, -0.02, 0]} scale={0.92}>
+      <group ref={jarGroupRef} position={[0, -0.04, 0]} scale={1.04}>
         {/* Warm Internal Candlelight Glow Illuminating the Stars */}
         <pointLight
           position={[0, -0.12, 0.22]}
@@ -597,17 +683,28 @@ function WishingJarScene({
 }
 
 interface WishingJar3DProps {
-  dropPulse: { id: number; color: string } | null;
-  onUserJiggle?: () => void;
+  isHolding: boolean;
+  onHoldingChange: (holding: boolean) => void;
+  onReleaseShake: () => void;
+  launchPulse: number;
+  onSceneReady?: () => void;
 }
 
-function WishingJar3D({ dropPulse, onUserJiggle }: WishingJar3DProps) {
+function WishingJar3D({
+  isHolding,
+  onHoldingChange,
+  onReleaseShake,
+  launchPulse,
+  onSceneReady,
+}: WishingJar3DProps) {
   const targetYawRef = useRef(0);
   const targetPitchRef = useRef(0);
   const isDraggingRef = useRef(false);
+  const isHoldingRef = useRef(false);
+  const activePointerIdRef = useRef<number | null>(null);
+  const holdStartRef = useRef(0);
   const lastPointerRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const dragDistanceRef = useRef(0);
-  const [isDragging, setIsDragging] = useState(false);
 
   const shakeImpulseRef = useRef({
     velZ: 0,
@@ -616,56 +713,72 @@ function WishingJar3D({ dropPulse, onUserJiggle }: WishingJar3DProps) {
   });
 
   useEffect(() => {
-    if (!dropPulse) return;
-    const dir = dropPulse.id % 2 === 0 ? -1 : 1;
-    shakeImpulseRef.current.velZ += dir * 2.9;
-    shakeImpulseRef.current.velX += 1.25;
-    shakeImpulseRef.current.swirlEnergy = 1.0;
-  }, [dropPulse]);
+    if (launchPulse === 0) return;
+    const dir = launchPulse % 2 === 0 ? -1 : 1;
+    shakeImpulseRef.current.velZ += dir * 3.8;
+    shakeImpulseRef.current.velX += 2.2;
+    shakeImpulseRef.current.swirlEnergy = 1.25;
+  }, [launchPulse]);
 
   const triggerJiggle = () => {
     const dir = Math.random() > 0.5 ? 1 : -1;
-    shakeImpulseRef.current.velZ += dir * 2.5;
-    shakeImpulseRef.current.velX += 1.0;
+    shakeImpulseRef.current.velZ += dir * 2.6;
+    shakeImpulseRef.current.velX += 1.05;
     shakeImpulseRef.current.swirlEnergy = Math.min(1.2, shakeImpulseRef.current.swirlEnergy + 0.85);
-    onUserJiggle?.();
   };
 
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!e.isPrimary) return;
     e.stopPropagation();
+    activePointerIdRef.current = e.pointerId;
     isDraggingRef.current = true;
-    setIsDragging(true);
+    isHoldingRef.current = true;
+    holdStartRef.current = Date.now();
     dragDistanceRef.current = 0;
     lastPointerRef.current = { x: e.clientX, y: e.clientY };
+    onHoldingChange(true);
+
+    const kickDir = Math.random() > 0.5 ? 1 : -1;
+    shakeImpulseRef.current.velZ += kickDir * 2.6;
+    shakeImpulseRef.current.velX += 1.0;
+    shakeImpulseRef.current.swirlEnergy = 1.0;
+
     e.currentTarget.setPointerCapture(e.pointerId);
   };
 
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     e.stopPropagation();
-    if (!isDraggingRef.current) return;
+    if (!isDraggingRef.current || activePointerIdRef.current !== e.pointerId) return;
     const dx = e.clientX - lastPointerRef.current.x;
     const dy = e.clientY - lastPointerRef.current.y;
     dragDistanceRef.current += Math.abs(dx) + Math.abs(dy);
     lastPointerRef.current = { x: e.clientX, y: e.clientY };
-    targetYawRef.current = THREE.MathUtils.clamp(targetYawRef.current + dx * 0.014, -1.1, 1.1);
+    targetYawRef.current = THREE.MathUtils.clamp(targetYawRef.current + dx * 0.015, -1.1, 1.1);
     targetPitchRef.current = THREE.MathUtils.clamp(targetPitchRef.current + dy * 0.008, -0.35, 0.35);
+    shakeImpulseRef.current.velZ += THREE.MathUtils.clamp(dx * 0.14, -2.6, 2.6);
     shakeImpulseRef.current.swirlEnergy = Math.min(
-      1.0,
-      shakeImpulseRef.current.swirlEnergy + Math.abs(dx) * 0.015
+      1.3,
+      shakeImpulseRef.current.swirlEnergy + Math.abs(dx) * 0.02
     );
   };
 
   const handlePointerEnd = (e: React.PointerEvent<HTMLDivElement>) => {
     e.stopPropagation();
-    if (isDraggingRef.current) {
-      isDraggingRef.current = false;
-      setIsDragging(false);
-      if (dragDistanceRef.current < 8) {
-        triggerJiggle();
-      }
-    }
+    if (!isDraggingRef.current || activePointerIdRef.current !== e.pointerId) return;
+    activePointerIdRef.current = null;
+    isDraggingRef.current = false;
+    isHoldingRef.current = false;
+    onHoldingChange(false);
+
     if (e.currentTarget.hasPointerCapture(e.pointerId)) {
       e.currentTarget.releasePointerCapture(e.pointerId);
+    }
+
+    const heldMs = Date.now() - holdStartRef.current;
+    if (heldMs >= 160 || dragDistanceRef.current >= 8) {
+      onReleaseShake();
+    } else {
+      triggerJiggle();
     }
   };
 
@@ -677,21 +790,30 @@ function WishingJar3D({ dropPulse, onUserJiggle }: WishingJar3DProps) {
       onPointerCancel={handlePointerEnd}
       onTouchStart={(e) => e.stopPropagation()}
       onTouchMove={(e) => e.stopPropagation()}
-      role="img"
-      aria-label="Interactive 3D glass wishing jar filled with glowing origami lucky stars. Drag to tilt or tap to shake."
-      className={`relative h-[188px] w-full touch-none select-none ${
-        isDragging ? 'cursor-grabbing' : 'cursor-grab'
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onReleaseShake();
+        }
+      }}
+      aria-label="Hũ sao điều ước 3D. Nhấn giữ và lắc rồi thả tay để thả một ngôi sao điều ước ngẫu nhiên."
+      className={`relative h-[275px] min-[390px]:h-[300px] w-full touch-none select-none ${
+        isHolding ? 'cursor-grabbing' : 'cursor-grab'
       }`}
     >
-      {/* Warm Ambient Backlight Halo */}
+      {/* Warm Ambient Backlight Halo (pulses brighter when shaking) */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute top-1/2 left-1/2 h-36 w-36 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#FFE28A]/60 blur-2xl"
+        className={`pointer-events-none absolute top-1/2 left-1/2 h-48 w-48 -translate-x-1/2 -translate-y-1/2 rounded-full blur-2xl transition-all duration-300 ${
+          isHolding ? 'scale-[1.15] bg-[#FFD86B]/75' : 'bg-[#FFE28A]/55'
+        }`}
       />
 
       <Canvas
-        dpr={[1, 2]}
-        camera={{ position: [0, 0.22, 4.95], fov: 33 }}
+        dpr={[1, 1.5]}
+        camera={{ position: [0, 0.14, 4.45], fov: 34 }}
         gl={{ antialias: true, alpha: true }}
         className="h-full w-full"
       >
@@ -699,39 +821,138 @@ function WishingJar3D({ dropPulse, onUserJiggle }: WishingJar3DProps) {
           targetYawRef={targetYawRef}
           targetPitchRef={targetPitchRef}
           isDraggingRef={isDraggingRef}
+          isHoldingRef={isHoldingRef}
           shakeImpulseRef={shakeImpulseRef}
+          onSceneReady={onSceneReady}
         />
       </Canvas>
-
-      {/* Shooting Star Burst Particle on Each Drop */}
-      <AnimatePresence>
-        {dropPulse && (
-          <motion.div
-            key={`burst-${dropPulse.id}`}
-            initial={{ opacity: 0.95, y: 20, scale: 0.5, rotate: -15 }}
-            animate={{ opacity: 0, y: 112, scale: 1.25, rotate: 95 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
-            className="pointer-events-none absolute top-[54%] left-1/2 z-20 -translate-x-1/2"
-            aria-hidden="true"
-          >
-            <svg viewBox="0 0 32 32" className="h-7 w-7 drop-shadow-[0_0_10px_rgba(255,215,90,0.9)]">
-              <path
-                d="M16 2 L19.8 11 L29 12.2 L22.2 18.4 L24 27.6 L16 23 L8 27.6 L9.8 18.4 L3 12.2 L12.2 11 Z"
-                fill={dropPulse.color}
-                stroke="#FFFFFF"
-                strokeWidth="1.2"
-              />
-            </svg>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }
 
-function ThreeDStarBadge({ theme, index }: { theme: StripTheme; index: number }) {
-  const gradId = `star-3d-${index}`;
+function ThreeDStarSVG({
+  theme,
+  gradId,
+  className = 'h-full w-full',
+}: {
+  theme: StripTheme;
+  gradId: string;
+  className?: string;
+}) {
+  return (
+    <svg viewBox="0 0 32 32" className={className}>
+      <defs>
+        <radialGradient id={gradId} cx="35%" cy="30%" r="70%">
+          <stop offset="0%" stopColor={theme.starLight} />
+          <stop offset="55%" stopColor={theme.starPrimary} />
+          <stop offset="100%" stopColor={theme.starDark} />
+        </radialGradient>
+      </defs>
+      <path
+        d="M16 3 L19.8 11 L28.5 12.2 L22.1 18.2 L23.7 27 L16 22.8 L8.3 27 L9.9 18.2 L3.5 12.2 L12.2 11 Z"
+        fill={`url(#${gradId})`}
+        stroke={theme.starDark}
+        strokeWidth="0.7"
+        strokeLinejoin="round"
+      />
+      <ellipse cx="13.5" cy="12" rx="2.6" ry="1.8" fill="white" fillOpacity="0.55" />
+    </svg>
+  );
+}
+
+const STAR_FLIGHT_TIMES = [0, 0.28, 0.48, 0.76, 0.94, 1];
+const STAR_TRAIL_OFFSETS = [
+  { delay: 0.05, sizeClass: 'h-4 w-4', opacityPeak: 0.85 },
+  { delay: 0.1, sizeClass: 'h-3 w-3', opacityPeak: 0.72 },
+  { delay: 0.16, sizeClass: 'h-2.5 w-2.5', opacityPeak: 0.58 },
+  { delay: 0.22, sizeClass: 'h-2 w-2', opacityPeak: 0.44 },
+];
+
+function ParabolicFallingStar({
+  flightId,
+  wish,
+  arcDir,
+}: {
+  flightId: number;
+  wish: WishItem;
+  arcDir: 1 | -1;
+}) {
+  const theme = STRIP_THEMES[wish.color];
+  const xKeyframes = [0, arcDir * 32, arcDir * 56, arcDir * 30, 0, 0];
+  const yKeyframes = [0, -54, -38, 128, 274, 282];
+
+  return (
+    <div
+      className="pointer-events-none absolute top-[22%] left-1/2 z-30 -translate-x-1/2"
+      aria-hidden="true"
+    >
+      {/* Initial Pop Aura Ring at the Jar Mouth */}
+      <motion.span
+        key={`launch-ring-${flightId}`}
+        initial={{ opacity: 0.85, scale: 0.35 }}
+        animate={{ opacity: 0, scale: 2.1 }}
+        transition={{ duration: 0.55, ease: 'easeOut' }}
+        className="absolute top-0 left-1/2 h-14 w-14 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[#FFD86B]/90 shadow-[0_0_20px_rgba(255,216,107,0.85)]"
+      />
+
+      {/* Stardust Comet Trail Following the Inverted Parabolic Arc */}
+      {STAR_TRAIL_OFFSETS.map((trail, tIdx) => (
+        <motion.div
+          key={`trail-${flightId}-${tIdx}`}
+          initial={{ opacity: 0, x: 0, y: 0, scale: 0.4 }}
+          animate={{
+            opacity: [0, trail.opacityPeak, trail.opacityPeak, trail.opacityPeak * 0.7, 0.3, 0],
+            x: xKeyframes,
+            y: yKeyframes,
+            scale: [0.35, 0.9, 1.05, 0.85, 0.5, 0.2],
+          }}
+          transition={{
+            duration: 1.45,
+            delay: trail.delay,
+            times: STAR_FLIGHT_TIMES,
+            ease: 'easeInOut',
+          }}
+          style={{
+            backgroundColor: tIdx % 2 === 0 ? theme.starLight : '#FFE885',
+            boxShadow: `0 0 10px ${theme.starGlow}`,
+          }}
+          className={`absolute -top-2 left-1/2 -translate-x-1/2 rounded-full ${trail.sizeClass}`}
+        />
+      ))}
+
+      {/* Main Large Glowing Star Along Inverted Parabolic Arc */}
+      <motion.div
+        key={`main-star-${flightId}`}
+        initial={{ opacity: 0.95, x: 0, y: 0, scale: 0.38, rotate: -25 }}
+        animate={{
+          opacity: [0.95, 1, 1, 1, 1, 0],
+          x: xKeyframes,
+          y: yKeyframes,
+          scale: [0.38, 1.15, 1.32, 1.18, 0.96, 1.55],
+          rotate: [-25, 45, 120, 230, 320, 360],
+        }}
+        transition={{
+          duration: 1.45,
+          times: STAR_FLIGHT_TIMES,
+          ease: 'easeInOut',
+        }}
+        className="relative -top-7 flex h-14 w-14 items-center justify-center"
+        style={{
+          filter: `drop-shadow(0 0 18px ${theme.starGlow}) drop-shadow(0 4px 10px rgba(255, 224, 120, 0.85))`,
+        }}
+      >
+        <span
+          className="absolute inset-0 scale-125 rounded-full blur-md"
+          style={{ backgroundColor: theme.starGlow }}
+        />
+        <ThreeDStarSVG theme={theme} gradId={`falling-star-${flightId}`} className="relative h-14 w-14" />
+      </motion.div>
+    </div>
+  );
+}
+
+function ThreeDStarBadge({ theme, idSuffix }: { theme: StripTheme; idSuffix: string | number }) {
+  const gradId = `star-3d-${idSuffix}`;
   return (
     <motion.div
       animate={{
@@ -742,74 +963,140 @@ function ThreeDStarBadge({ theme, index }: { theme: StripTheme; index: number })
         duration: 2.8,
         repeat: Infinity,
         ease: 'easeInOut',
-        delay: index * 0.28,
       }}
-      className="relative flex h-7 w-7 shrink-0 items-center justify-center"
+      className="relative flex h-8 w-8 shrink-0 items-center justify-center"
       style={{ filter: `drop-shadow(0 3px 6px ${theme.starGlow})` }}
       aria-hidden="true"
     >
-      <svg viewBox="0 0 32 32" className="h-full w-full">
-        <defs>
-          <radialGradient id={gradId} cx="35%" cy="30%" r="70%">
-            <stop offset="0%" stopColor={theme.starLight} />
-            <stop offset="55%" stopColor={theme.starPrimary} />
-            <stop offset="100%" stopColor={theme.starDark} />
-          </radialGradient>
-        </defs>
-        <path
-          d="M16 3 L19.8 11 L28.5 12.2 L22.1 18.2 L23.7 27 L16 22.8 L8.3 27 L9.9 18.2 L3.5 12.2 L12.2 11 Z"
-          fill={`url(#${gradId})`}
-          stroke={theme.starDark}
-          strokeWidth="0.7"
-          strokeLinejoin="round"
-        />
-        <ellipse cx="13.5" cy="12" rx="2.6" ry="1.8" fill="white" fillOpacity="0.55" />
-      </svg>
+      <ThreeDStarSVG theme={theme} gradId={gradId} />
     </motion.div>
   );
 }
 
+interface ActiveWishState {
+  runId: number;
+  wish: WishItem;
+  tilt: number;
+}
+
+interface FallingStarState {
+  id: number;
+  wish: WishItem;
+  arcDir: 1 | -1;
+}
+
 export function Page3Wishes() {
-  const { items, ctaLabel } = mockData.wishes;
-  const [visibleCount, setVisibleCount] = useState(0);
-  const [replayRun, setReplayRun] = useState(0);
-  const [dropPulse, setDropPulse] = useState<{ id: number; color: string } | null>(null);
+  const {
+    items,
+    instructionIdle,
+    instructionHolding,
+    instructionFalling,
+    instructionAfterWish,
+  } = mockData.wishes;
+
+  const [isHolding, setIsHolding] = useState(false);
+  const [launchPulse, setLaunchPulse] = useState(0);
+  const [fallingStar, setFallingStar] = useState<FallingStarState | null>(null);
+  const [activeWish, setActiveWish] = useState<ActiveWishState | null>(null);
+  const [isScrolling, setIsScrolling] = useState(false);
+
+  const bagRef = useRef<number[]>([]);
+  const lastPickedIdxRef = useRef<number | null>(null);
+  const runCounterRef = useRef(0);
+  const wishPopTimerRef = useRef<number | null>(null);
+  const scrollTimeoutRef = useRef<number | null>(null);
+
+  const pickRandomWish = useCallback((): WishItem => {
+    if (bagRef.current.length === 0) {
+      const indices = items.map((_, i) => i);
+      for (let i = indices.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [indices[i], indices[j]] = [indices[j], indices[i]];
+      }
+      if (
+        indices.length > 1 &&
+        lastPickedIdxRef.current !== null &&
+        indices[indices.length - 1] === lastPickedIdxRef.current
+      ) {
+        [indices[0], indices[indices.length - 1]] = [
+          indices[indices.length - 1],
+          indices[0],
+        ];
+      }
+      bagRef.current = indices;
+    }
+    const nextIdx = bagRef.current.pop() ?? 0;
+    lastPickedIdxRef.current = nextIdx;
+    return items[nextIdx];
+  }, [items]);
+
+  const handleReleaseShake = useCallback(() => {
+    if (fallingStar !== null) return;
+
+    if (wishPopTimerRef.current !== null) {
+      window.clearTimeout(wishPopTimerRef.current);
+      wishPopTimerRef.current = null;
+    }
+
+    const drawn = pickRandomWish();
+    runCounterRef.current += 1;
+    const runId = runCounterRef.current;
+    const arcDir: 1 | -1 = runId % 2 === 0 ? 1 : -1;
+
+    setActiveWish(null);
+    setLaunchPulse((prev) => prev + 1);
+    setFallingStar({ id: runId, wish: drawn, arcDir });
+
+    wishPopTimerRef.current = window.setTimeout(() => {
+      setFallingStar(null);
+      setActiveWish({
+        runId,
+        wish: drawn,
+        tilt: TILT_ANGLES[runId % TILT_ANGLES.length],
+      });
+      wishPopTimerRef.current = null;
+    }, 1450);
+  }, [fallingStar, pickRandomWish]);
+
+  const handleScroll = useCallback(() => {
+    setIsScrolling(true);
+    if (scrollTimeoutRef.current !== null) {
+      window.clearTimeout(scrollTimeoutRef.current);
+    }
+    scrollTimeoutRef.current = window.setTimeout(() => {
+      setIsScrolling(false);
+      scrollTimeoutRef.current = null;
+    }, 950);
+  }, []);
 
   useEffect(() => {
-    setVisibleCount(0);
-    setDropPulse(null);
-    const timers: number[] = [];
-
-    items.forEach((item, idx) => {
-      const delay = 600 + idx * 380;
-      const t = window.setTimeout(() => {
-        setVisibleCount(idx + 1);
-        setDropPulse({
-          id: replayRun * 10 + idx + 1,
-          color: STRIP_THEMES[item.color].starPrimary,
-        });
-      }, delay);
-      timers.push(t);
-    });
-
     return () => {
-      timers.forEach((t) => window.clearTimeout(t));
+      if (wishPopTimerRef.current !== null) {
+        window.clearTimeout(wishPopTimerRef.current);
+      }
+      if (scrollTimeoutRef.current !== null) {
+        window.clearTimeout(scrollTimeoutRef.current);
+      }
     };
-  }, [items, replayRun]);
+  }, []);
 
-  const handleReplay = () => {
-    setVisibleCount(0);
-    setDropPulse(null);
-    setReplayRun((prev) => prev + 1);
-  };
+  const guidanceText = isHolding
+    ? instructionHolding
+    : fallingStar !== null
+      ? instructionFalling
+      : activeWish !== null
+        ? instructionAfterWish
+        : instructionIdle;
+
+  const activeTheme = activeWish ? STRIP_THEMES[activeWish.wish.color] : null;
 
   return (
     <section
       aria-label="Wishes for your new year"
-      className="relative flex h-full w-full flex-col items-center overflow-hidden bg-gradient-to-b from-[#FCE6B8] via-[#FDF2DC] to-[#FBE8E0] px-5 pt-11 pb-24"
+      className="relative flex h-full w-full flex-col items-center overflow-hidden bg-gradient-to-b from-[#FCE6B8] via-[#FDF2DC] to-[#FBE8E0] px-4 pt-9 pb-[84px]"
     >
-      {/* Centered Header matching ref_05 */}
-      <header className="relative z-10 text-center">
+      {/* Centered Header */}
+      <header className="relative z-10 shrink-0 text-center">
         <p className="text-[10.5px] font-bold uppercase tracking-[0.15em] text-[#D92B52]">
           {mockData.pages[2]?.badge ?? 'MAKE A WISH'}
         </p>
@@ -818,66 +1105,109 @@ export function Page3Wishes() {
         </h2>
       </header>
 
-      {/* Interactive 3D Wishing Glass Jar */}
-      <div className="relative z-10 mt-0.5 flex w-full items-center justify-center">
-        <WishingJar3D dropPulse={dropPulse} />
-      </div>
+      {/* Main Centered Wishing Stage */}
+      <div
+        onScroll={handleScroll}
+        className={`wishes-scroll ${
+          isScrolling ? 'is-scrolling' : ''
+        } relative z-10 flex min-h-0 w-full max-w-[356px] flex-1 flex-col items-center justify-center overflow-y-auto touch-pan-y overscroll-y-contain px-1 pt-5 pb-2`}
+      >
+        <div className="relative flex w-full flex-col items-center overflow-visible">
+          {/* Centered Enlarged Interactive 3D Wishing Jar */}
+          <WishingJar3D
+            isHolding={isHolding}
+            onHoldingChange={setIsHolding}
+            onReleaseShake={handleReleaseShake}
+            launchPulse={launchPulse}
+          />
 
-      {/* 5 Staggered Tactile Pastel Paper Wish Strips */}
-      <div className="relative z-10 mt-0.5 flex w-full max-w-[328px] flex-1 flex-col justify-start gap-2.5 [perspective:900px]">
-        <AnimatePresence>
-          {items.slice(0, visibleCount).map((item, idx) => {
-            const theme = STRIP_THEMES[item.color];
-            const tilt = TILT_ANGLES[idx % TILT_ANGLES.length];
+          {/* Slow Inverted Parabolic Shooting Star Burst on Release */}
+          <AnimatePresence>
+            {fallingStar && (
+              <ParabolicFallingStar
+                key={`flight-${fallingStar.id}`}
+                flightId={fallingStar.id}
+                wish={fallingStar.wish}
+                arcDir={fallingStar.arcDir}
+              />
+            )}
+          </AnimatePresence>
 
-            return (
-              <motion.div
-                key={`${replayRun}-${item.id}`}
-                initial={{ opacity: 0, y: -44, scale: 0.5, rotate: tilt * 2.2 }}
-                animate={{ opacity: 1, y: 0, scale: 1, rotate: tilt }}
-                exit={{ opacity: 0, scale: 0.8 }}
-                whileHover={{ scale: 1.018, y: -1.5, rotate: tilt * 0.45 }}
-                whileTap={{ scale: 0.982, y: 1 }}
-                onPointerDown={(e) => e.stopPropagation()}
-                onTouchStart={(e) => e.stopPropagation()}
-                transition={{
-                  type: 'spring',
-                  stiffness: 290,
-                  damping: 21,
-                }}
-                style={{
-                  backgroundImage: `linear-gradient(180deg, ${theme.bg} 0%, ${theme.bgTo} 100%), repeating-linear-gradient(90deg, transparent, transparent 48px, rgba(135, 95, 110, 0.06) 48px, rgba(135, 95, 110, 0.06) 49px)`,
-                  borderColor: theme.border,
-                }}
-                className="relative flex cursor-pointer items-center gap-3 overflow-hidden rounded-xl border px-3.5 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.85),inset_0_-2px_0_rgba(120,70,90,0.08),0_10px_20px_-6px_rgba(45,25,43,0.13),0_3px_6px_rgba(45,25,43,0.06)]"
-              >
-                {/* Subtle Diagonal Paper Crease Sheens */}
-                <span
-                  aria-hidden="true"
-                  className="pointer-events-none absolute -top-4 -right-6 h-12 w-24 rotate-[18deg] bg-white/35 blur-[2px]"
-                />
-                <ThreeDStarBadge theme={theme} index={idx} />
-                <p className="relative z-10 text-[13.5px] font-semibold leading-snug text-[#2D192B]">
-                  {item.text}
-                </p>
-              </motion.div>
-            );
-          })}
-        </AnimatePresence>
-      </div>
+          {/* Concise Dynamic Instruction Pill */}
+          <motion.div
+            animate={isHolding ? { scale: 1.03 } : { scale: 1 }}
+            transition={{ duration: 0.2 }}
+            className={`relative z-20 mt-1 inline-flex max-w-[320px] items-center gap-2 rounded-full border px-3.5 py-1.5 text-center shadow-[0_4px_14px_rgba(45,25,43,0.06)] backdrop-blur-sm transition-colors duration-200 ${
+              isHolding
+                ? 'border-[#F3C878] bg-[#FFF0D6]/95 text-[#6E3B18]'
+                : 'border-[#F4D5DF] bg-[#FFFBF6]/85 text-[#5A374C]'
+            }`}
+          >
+            <SparklesIcon
+              className={`h-3.5 w-3.5 shrink-0 ${
+                isHolding ? 'animate-spin text-[#D97706]' : 'animate-pulse text-[#D92B52]'
+              }`}
+            />
+            <span className="text-[12px] font-semibold leading-snug">{guidanceText}</span>
+          </motion.div>
 
-      {/* Replay Button */}
-      <div className="relative z-20 mt-2 flex justify-center">
-        <button
-          type="button"
-          onClick={handleReplay}
-          onPointerDown={(e) => e.stopPropagation()}
-          onTouchStart={(e) => e.stopPropagation()}
-          className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-[#F0E3DC] bg-white/95 px-5 py-2.5 text-[13px] font-bold text-[#2D192B] shadow-[0_8px_20px_rgba(45,25,43,0.09)] transition-all hover:scale-[1.03] hover:shadow-[0_10px_24px_rgba(225,45,83,0.16)] active:scale-95"
-        >
-          <SparklesIcon className="h-4 w-4 text-[#E12D53]" />
-          <span>{ctaLabel}</span>
-        </button>
+          {/* Popped Random Wish Card Area */}
+          <div className="relative z-20 mt-3 flex min-h-[82px] w-full max-w-[328px] shrink-0 items-start justify-center [perspective:900px]">
+            <AnimatePresence mode="wait">
+              {activeWish && activeTheme && (
+                <div key={`wish-wrap-${activeWish.runId}`} className="relative w-full">
+                  {/* Radial Starburst Glow When Wish Pops In */}
+                  <motion.span
+                    initial={{ scale: 0.4, opacity: 0.9 }}
+                    animate={{ scale: 1.45, opacity: 0 }}
+                    transition={{ duration: 0.55, ease: 'easeOut' }}
+                    aria-hidden="true"
+                    className="pointer-events-none absolute inset-0 rounded-2xl blur-md"
+                    style={{ backgroundColor: activeTheme.starGlow }}
+                  />
+                  <motion.div
+                    initial={{
+                      opacity: 0,
+                      y: -26,
+                      scale: 0.42,
+                      rotate: activeWish.tilt * 2.4,
+                    }}
+                    animate={{
+                      opacity: 1,
+                      y: 0,
+                      scale: 1,
+                      rotate: activeWish.tilt,
+                    }}
+                    exit={{ opacity: 0, scale: 0.82, y: 8 }}
+                    whileHover={{ scale: 1.02, y: -1.5, rotate: activeWish.tilt * 0.45 }}
+                    whileTap={{ scale: 0.98, y: 1 }}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onTouchStart={(e) => e.stopPropagation()}
+                    transition={{
+                      type: 'spring',
+                      stiffness: 320,
+                      damping: 20,
+                    }}
+                    style={{
+                      backgroundImage: `linear-gradient(180deg, ${activeTheme.bg} 0%, ${activeTheme.bgTo} 100%), repeating-linear-gradient(90deg, transparent, transparent 48px, rgba(135, 95, 110, 0.06) 48px, rgba(135, 95, 110, 0.06) 49px)`,
+                      borderColor: activeTheme.border,
+                    }}
+                    className="relative flex w-full cursor-pointer items-center gap-3 overflow-hidden rounded-xl border px-3.5 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.85),inset_0_-2px_0_rgba(120,70,90,0.08),0_12px_24px_-6px_rgba(45,25,43,0.15),0_4px_8px_rgba(45,25,43,0.07)]"
+                  >
+                    <span
+                      aria-hidden="true"
+                      className="pointer-events-none absolute -top-4 -right-6 h-12 w-24 rotate-[18deg] bg-white/35 blur-[2px]"
+                    />
+                    <ThreeDStarBadge theme={activeTheme} idSuffix={activeWish.runId} />
+                    <p className="relative z-10 text-[13.5px] font-semibold leading-snug text-[#2D192B]">
+                      {activeWish.wish.text}
+                    </p>
+                  </motion.div>
+                </div>
+              )}
+            </AnimatePresence>
+          </div>
+        </div>
       </div>
     </section>
   );

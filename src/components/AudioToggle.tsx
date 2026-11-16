@@ -52,6 +52,10 @@ export function useBirthdayAudio(): AudioController {
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
+  const isPlayingRef = useRef(false);
+  const isMutedRef = useRef(false);
+  const isStartingRef = useRef(false);
+  const wasPausedOnHideRef = useRef(false);
 
   const stopSynthLoop = useCallback(() => {
     if (synthTimerRef.current !== null) {
@@ -125,6 +129,7 @@ export function useBirthdayAudio(): AudioController {
 
       stopSynthLoop();
       scheduleNextSynthNote();
+      isPlayingRef.current = true;
       setIsPlaying(true);
     },
     [scheduleNextSynthNote, stopSynthLoop]
@@ -138,65 +143,120 @@ export function useBirthdayAudio(): AudioController {
     audioRef.current = audio;
 
     const handleError = () => {
-      if (isPlaying && !usingFallbackRef.current) {
-        startSynthFallback(isMuted);
+      if ((isPlayingRef.current || isStartingRef.current) && !usingFallbackRef.current) {
+        isStartingRef.current = false;
+        startSynthFallback(isMutedRef.current);
+      }
+    };
+
+    const pauseForBackground = () => {
+      if (!isPlayingRef.current || isMutedRef.current) return;
+      wasPausedOnHideRef.current = true;
+      if (!usingFallbackRef.current) {
+        audio.pause();
+      } else {
+        stopSynthLoop();
+        void audioCtxRef.current?.suspend();
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        pauseForBackground();
+      } else if (wasPausedOnHideRef.current) {
+        wasPausedOnHideRef.current = false;
+        if (isMutedRef.current) return;
+        if (!usingFallbackRef.current) {
+          void audio.play().catch(() => {});
+        } else if (audioCtxRef.current) {
+          void audioCtxRef.current.resume().then(() => {
+            scheduleNextSynthNote();
+          });
+        }
       }
     };
 
     audio.addEventListener('error', handleError);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('pagehide', pauseForBackground);
     return () => {
       audio.removeEventListener('error', handleError);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('pagehide', pauseForBackground);
       audio.pause();
       stopSynthLoop();
       if (audioCtxRef.current) {
         void audioCtxRef.current.close();
       }
     };
-  }, []);
+  }, [scheduleNextSynthNote, startSynthFallback, stopSynthLoop]);
 
   const startAudio = useCallback(() => {
-    if (isPlaying) return;
+    if (isPlayingRef.current || isStartingRef.current) return;
+    isMutedRef.current = false;
     setIsMuted(false);
 
     const audio = audioRef.current;
     if (audio && !usingFallbackRef.current) {
       audio.muted = false;
+      isStartingRef.current = true;
       const playPromise = audio.play();
       if (playPromise !== undefined) {
         playPromise
           .then(() => {
+            isStartingRef.current = false;
+            audio.muted = isMutedRef.current;
+            isPlayingRef.current = true;
             setIsPlaying(true);
+            if (document.hidden && !isMutedRef.current) {
+              wasPausedOnHideRef.current = true;
+              audio.pause();
+            }
           })
           .catch(() => {
-            startSynthFallback(false);
+            isStartingRef.current = false;
+            startSynthFallback(isMutedRef.current);
           });
         return;
       }
+      isStartingRef.current = false;
+      isPlayingRef.current = true;
+      setIsPlaying(true);
+      return;
     }
 
     startSynthFallback(false);
-  }, [isPlaying, startSynthFallback]);
+  }, [startSynthFallback]);
 
   const toggleMute = useCallback(() => {
-    if (!isPlaying) {
+    if (!isPlayingRef.current && !isStartingRef.current) {
       startAudio();
       return;
     }
 
-    const nextMuted = !isMuted;
+    const nextMuted = !isMutedRef.current;
+    isMutedRef.current = nextMuted;
     setIsMuted(nextMuted);
 
     if (audioRef.current && !usingFallbackRef.current) {
       audioRef.current.muted = nextMuted;
+      if (!nextMuted && audioRef.current.paused && isPlayingRef.current) {
+        void audioRef.current.play().catch(() => {});
+      }
     }
     if (audioCtxRef.current && gainNodeRef.current) {
+      if (!nextMuted && audioCtxRef.current.state === 'suspended') {
+        void audioCtxRef.current.resume().then(() => {
+          scheduleNextSynthNote();
+        });
+      }
       gainNodeRef.current.gain.setTargetAtTime(
         nextMuted ? 0 : 0.45,
         audioCtxRef.current.currentTime,
         0.04
       );
     }
-  }, [isMuted, isPlaying, startAudio]);
+  }, [scheduleNextSynthNote, startAudio]);
 
   return { isPlaying, isMuted, startAudio, toggleMute };
 }

@@ -124,6 +124,7 @@ export function Page5Candles({ page }: Page5CandlesProps) {
 
   const rafRef = useRef<number | null>(null);
   const isHoldingRef = useRef(false);
+  const holdingPointerIdRef = useRef<number | null>(null);
   const progressRef = useRef(0);
   const candlesLitRef = useRef(true);
 
@@ -147,6 +148,7 @@ export function Page5Candles({ page }: Page5CandlesProps) {
   const completeBlowOut = useCallback(() => {
     cancelAnimation();
     isHoldingRef.current = false;
+    holdingPointerIdRef.current = null;
     progressRef.current = 0;
     candlesLitRef.current = false;
     setHoldProgress(0);
@@ -182,6 +184,7 @@ export function Page5Candles({ page }: Page5CandlesProps) {
   const stopHoldEarly = useCallback(() => {
     if (!isHoldingRef.current) return;
     isHoldingRef.current = false;
+    holdingPointerIdRef.current = null;
     cancelAnimation();
 
     if (!candlesLitRef.current || progressRef.current <= 0) {
@@ -215,6 +218,7 @@ export function Page5Candles({ page }: Page5CandlesProps) {
   const handleRelight = () => {
     cancelAnimation();
     isHoldingRef.current = false;
+    holdingPointerIdRef.current = null;
     progressRef.current = 0;
     candlesLitRef.current = true;
     setHoldProgress(0);
@@ -339,7 +343,9 @@ export function Page5Candles({ page }: Page5CandlesProps) {
                 type="button"
                 onPointerDown={(e) => {
                   e.stopPropagation();
+                  if (!e.isPrimary) return;
                   if (e.button !== 0 && e.pointerType === 'mouse') return;
+                  holdingPointerIdRef.current = e.pointerId;
                   try {
                     e.currentTarget.setPointerCapture(e.pointerId);
                   } catch {
@@ -349,17 +355,32 @@ export function Page5Candles({ page }: Page5CandlesProps) {
                 }}
                 onPointerUp={(e) => {
                   e.stopPropagation();
+                  if (
+                    holdingPointerIdRef.current !== null &&
+                    e.pointerId !== holdingPointerIdRef.current
+                  ) {
+                    return;
+                  }
                   if (e.currentTarget.hasPointerCapture(e.pointerId)) {
                     e.currentTarget.releasePointerCapture(e.pointerId);
                   }
                   stopHoldEarly();
                 }}
-                onPointerLeave={() => stopHoldEarly()}
+                onPointerLeave={(e) => {
+                  if (e.pointerType === 'touch' && holdingPointerIdRef.current === e.pointerId) {
+                    return;
+                  }
+                  stopHoldEarly();
+                }}
                 onPointerCancel={() => stopHoldEarly()}
                 onTouchStart={(e) => {
                   e.stopPropagation();
                 }}
                 onTouchEnd={(e) => {
+                  e.stopPropagation();
+                  stopHoldEarly();
+                }}
+                onTouchCancel={(e) => {
                   e.stopPropagation();
                   stopHoldEarly();
                 }}
@@ -377,7 +398,8 @@ export function Page5Candles({ page }: Page5CandlesProps) {
                 }}
                 onContextMenu={(e) => e.preventDefault()}
                 aria-label="Hold to blow out the candles"
-                className="relative flex h-[48px] w-full cursor-pointer items-center justify-center overflow-hidden rounded-full border border-[#E7DCE0] bg-[#FAF4F6] text-[15px] font-semibold text-[#2D192B] shadow-[0_4px_12px_rgba(45,25,43,0.06)] transition-transform active:scale-[0.985] focus-visible:outline-none touch-none"
+                style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none' }}
+                className="relative flex h-[48px] w-full cursor-pointer select-none items-center justify-center overflow-hidden rounded-full border border-[#E7DCE0] bg-[#FAF4F6] text-[15px] font-semibold text-[#2D192B] shadow-[0_4px_12px_rgba(45,25,43,0.06)] transition-transform active:scale-[0.985] focus-visible:outline-none touch-none"
               >
                 {/* Rose-Red Left-to-Right Progress Fill */}
                 <div

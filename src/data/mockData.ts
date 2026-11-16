@@ -17,7 +17,17 @@ export interface StoryChapter {
 
 export interface WishItem {
   id: string;
-  color: 'pink' | 'lavender' | 'mint' | 'yellow' | 'coral';
+  color:
+    | 'pink'
+    | 'lavender'
+    | 'mint'
+    | 'yellow'
+    | 'coral'
+    | 'sky'
+    | 'apricot'
+    | 'orchid'
+    | 'lime'
+    | 'aqua';
   text: string;
 }
 
@@ -58,9 +68,12 @@ export interface BirthdayMockData {
     continuedText: string;
   };
   wishes: {
-    imageUrl: string;
     items: WishItem[];
     ctaLabel: string;
+    instructionIdle: string;
+    instructionHolding: string;
+    instructionFalling: string;
+    instructionAfterWish: string;
   };
   moments: {
     marqueeTitle: string;
@@ -107,9 +120,9 @@ export const mockData: BirthdayMockData = {
     },
     {
       id: 'story',
-      title: 'Our story',
+      title: 'Your story',
       badge: 'CHAPTER BY CHAPTER',
-      heading: 'Our story',
+      heading: 'Your story',
     },
     {
       id: 'wishes',
@@ -183,15 +196,43 @@ export const mockData: BirthdayMockData = {
     continuedText: 'To be continued...',
   },
   wishes: {
-    imageUrl: 'https://picsum.photos/seed/birthday-wishes/360/220',
     items: [
       { id: 'w1', color: 'pink', text: 'Mong mọi giông bão đều dừng sau cánh cửa' },
       { id: 'w2', color: 'lavender', text: 'Mong bạn ăn ngon, ngủ kỹ, cơ thể luôn tràn đầy năng lượng' },
       { id: 'w3', color: 'mint', text: 'Mong ví tiền luôn rủng rỉnh để tự do làm điều mình thích' },
       { id: 'w4', color: 'yellow', text: 'Mong luôn gặp người tử tế và tử tế với mọi người' },
       { id: 'w5', color: 'coral', text: 'Mong bạn luôn yêu thương chính mình' },
+      {
+        id: 'w6',
+        color: 'sky',
+        text: 'Mong mọi dự định ấp ủ đều thành hiện thực.',
+      },
+      {
+        id: 'w7',
+        color: 'apricot',
+        text: 'Mong mỗi ngày trôi qua đều nhẹ nhàng và ngập tràn niềm vui.',
+      },
+      {
+        id: 'w8',
+        color: 'orchid',
+        text: 'Mong bạn có thêm thật nhiều chuyến đi vui và trải nghiệm mới.',
+      },
+      {
+        id: 'w9',
+        color: 'lime',
+        text: 'Mong những điều nhỏ bé xung quanh luôn khiến bạn mỉm cười.',
+      },
+      {
+        id: 'w10',
+        color: 'aqua',
+        text: 'Mong may mắn và bình an luôn đồng hành cùng bạn trong tuổi mới.',
+      },
     ],
     ctaLabel: 'Make a wish again',
+    instructionIdle: 'Nhấn giữ & lắc hũ rồi thả tay để nhận một điều ước ngẫu nhiên',
+    instructionHolding: 'Đang lắc hũ sao... thả tay ra để ngôi sao bay lên nhé!',
+    instructionFalling: 'Ngôi sao đang mang điều ước rơi xuống...',
+    instructionAfterWish: 'Nhấn giữ & lắc hũ lần nữa để rút điều ước khác',
   },
   moments: {
     marqueeTitle: 'Photobooth',
@@ -239,7 +280,7 @@ export const mockData: BirthdayMockData = {
     litHeading: 'Blow out the candles',
     blownHeading: 'Wish made! Happy Birthday!',
     blownSubtitle:
-      'Lorem ipsum dolor sit amet, may every wish you just made come true in your new year.',
+      'Wanna try again??',
     holdLabel: 'Hold',
     relightLabel: 'Light candles again',
     candleColors: ['#9CE0CC', '#F9DE7E', '#F79EB3', '#BFA3E8', '#F5959E'],

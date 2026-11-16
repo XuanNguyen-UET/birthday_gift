@@ -329,7 +329,7 @@ export function Page1Letter({ onFullStateChange }: Page1LetterProps) {
             </div>
 
             {/* Scrollable Handwritten Letter Body */}
-            <div className="letter-scroll flex-1 overflow-y-auto px-6 py-5">
+            <div className="letter-scroll flex-1 touch-pan-y overscroll-y-contain overflow-y-auto px-6 py-5">
               <p className="font-handwriting text-[27px] leading-snug text-[#D62950]">
                 {letter.greeting}
               </p>
